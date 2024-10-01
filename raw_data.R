@@ -45,3 +45,18 @@ cleaned_data <- sqldf("SELECT ctd.clean_date AS date_time, ctd.devices, ctd.area
   mutate(date_time = format(date_time, format = "%Y-%m-%d %H:%M:%S"))
 
 
+# Device count by territory on June 11th, 2024.
+# Date_time chosen as no public holiday, Not a friday or weekend
+# and most people asleep at 3am
+devices_by_ter <- sqldf("SELECT CAST(SUM(devices) AS INTEGER), location, location_2
+                FROM cleaned_data
+                WHERE date_time = '2024-06-12 04:00:00'
+                GROUP BY location")
+
+# Device count by city on June 11th, 2024.
+# Date_time chosen as no public holiday, Not a friday or weekend
+# and most people asleep at 3am
+devices_by_city <- sqldf("SELECT CAST(SUM(devices) AS INTEGER) AS device_count, location_2
+                FROM cleaned_data
+                WHERE date_time = '2024-06-12 04:00:00'
+                GROUP BY location_2")
