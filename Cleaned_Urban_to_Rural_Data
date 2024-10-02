@@ -1,0 +1,49 @@
+# read .parquet file
+install.packages("arrow")
+library(arrow)
+
+# read in raw data
+sp_tele_data <- read.csv("sp_data.csv.gz")
+vf_tele_data <- read_parquet("vf_data.parquet")
+sa2_codes_names <- read.csv("sa2_2023.csv")
+sa2_to_ta <- read.csv("sa2_ta_concord_2023.csv")
+pop_estimates <- read.csv("subnational_pop_ests.csv")
+urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
+urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
+
+library(tidyverse)
+
+# Clean urban-rural indicator data
+urban_rural_codes_clean <- urban_rural_codes %>%
+  select(Concordance.report, X, X.3)
+
+colnames(urban_rural_codes_clean) <- c("Urban_Rural_2023_Code", "Area_Name", "Area_Type")
+
+# Clean SA2-urban/rural concordance data
+urban_rural_sa2_clean <- urban_rural_to_sa2 %>%
+  select(Concordance.report, X.2, X.3)
+
+colnames(urban_rural_sa2_clean) <- c("Statistical_Area", "Urban_Rural_2023_Code", "Area_Name")
+
+#check for duplicates
+urban_rural_codes_clean <- urban_rural_codes_clean %>% distinct()
+urban_rural_sa2_clean <- urban_rural_sa2_clean %>% distinct()
+
+#merging urban and rural datasets
+merged_urban_rural_sa2 <- urban_rural_codes_clean %>% 
+  inner_join(urban_rural_sa2_clean, by = "Urban_Rural_2023_Code")
+
+merged_urban_rural_sa2 <- merged_urban_rural_sa2 %>% 
+  select(-Area_Name.x)
+
+merged_urban_rural_sa2 <- merged_urban_rural_sa2 %>% 
+  rename(Area_Name = Area_Name.y)
+
+#cbd areaas is the territotial code for the 3 important cities
+#filtering data
+cbd_areas <- merged_urban_rural_sa2 %>% 
+  filter(Urban_Rural_2023_Code == 1108 | Urban_Rural_2023_Code == 2106 | Urban_Rural_2023_Code == 1402)
+
+
+non_cbd_areas <- merged_urban_rural_sa2 %>% 
+  filter(Urban_Rural_2023_Code != 1108 & Urban_Rural_2023_Code != 2106 & Urban_Rural_2023_Code != 1402)
