@@ -60,3 +60,40 @@ devices_by_city <- sqldf("SELECT CAST(SUM(devices) AS INTEGER) AS device_count, 
                 FROM cleaned_data
                 WHERE date_time = '2024-06-12 04:00:00'
                 GROUP BY location_2")
+
+# clean dataset (deliverable)
+clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
+                       location_2 AS statistical_area_level_2_code,
+                       date_time AS NZST_date_time,
+                       devices AS people_count
+                       FROM cleaned_data
+                       ORDER BY date_time, devices DESC") %>%
+  drop_na()
+
+# export clean data set
+write.csv(clean_dataset, file = "clean_dataset.csv", row.names = FALSE)
+
+# get device counts and difference in device counts from last hour
+device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS difference_from_last_hour,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM clean_dataset
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+
+diff_device_counts <- sqldf("
+  SELECT 
+    difference_from_last_hour AS total_difference,
+    statistical_area_level_2_code,
+    territorial_authority_code
+    NZST_date_time,
+    people_count,
+    previous_hour_people_count
+  FROM device_counts")
