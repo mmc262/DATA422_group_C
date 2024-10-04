@@ -26,3 +26,4 @@ aggregated_data %>%
   labs(title = "Sum of Absolute Changes by Day of the Week",
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
+

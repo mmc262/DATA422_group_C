@@ -28,3 +28,7 @@ clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
                        GROUP BY location_2, location, date_time
                        ORDER BY territorial_authority_code, statistical_area_level_2_code") %>%
   drop_na()
+
+
+
+summary(vf_tele_data)

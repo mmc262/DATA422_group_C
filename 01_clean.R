@@ -11,12 +11,19 @@ urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
 urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
 
 # clean date time data
-vf_tele_data <- vf_tele_data %>% mutate(clean_date = as.POSIXct(dt, origin="1970-01-01", tz="UTC")) %>%
-  mutate(data_from = "vf")
+vf_tele_data <- vf_tele_data %>% mutate(clean_date = as.POSIXct(dt, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC"),
+                                        clean_date = format(clean_date, "%Y-%m-%d %H:%M:%S"),
+                                        data_from = "vf")
+
 sp_tele_data <- sp_tele_data %>%
+  # Convert ts to POSIXct and filter out dates before 2024-06-03 00:00:00
+  filter(as.POSIXct(ts, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC") >= as.POSIXct("2024-06-03 00:00:00", tz="UTC")) %>%
+  # Perform the mutation
   mutate(clean_date = as.POSIXct(ts, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC") + 12 * 3600,
          clean_date = format(clean_date, "%Y-%m-%d %H:%M:%S"),
          data_from = "sp")
+
+
 
 # clean columns and variable names
 sa2_codes_names <- rownames_to_column(sa2_codes_names)
