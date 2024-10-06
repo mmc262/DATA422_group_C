@@ -23,15 +23,17 @@ cleaned_data <- cleaned_data %>%
 clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
                        location_2 AS statistical_area_level_2_code,
                        date_time AS NZST_date_time,
-                       CAST(SUM(devices) AS INTEGER) AS people_count
+                       CAST(SUM(devices) AS INTEGER) AS device_count
                        FROM cleaned_data
                        GROUP BY location_2, location, date_time
                        ORDER BY territorial_authority_code, statistical_area_level_2_code") %>%
-  drop_na()
+  drop_na() %>%
+  mutate(people_count = 1.819 * device_count)
 
 # ONLY INCLUDE DAY 7AM TO 6 PM (ctrl + shift + C)
-clean_dataset$NZST_date_time <- as.POSIXct(clean_dataset$NZST_date_time, format="%Y-%m-%d %H:%M:%S", tz="UTC")
+# clean_dataset$NZST_date_time <- as.POSIXct(clean_dataset$NZST_date_time, format="%Y-%m-%d %H:%M:%S", tz="UTC")
+# 
+# # Filter the data
+# clean_dataset <- clean_dataset %>%
+#   filter(format(NZST_date_time, "%H:%M:%S") >= "07:00:00" & format(NZST_date_time, "%H:%M:%S") <= "18:00:00")
 
-# Filter the data
-clean_dataset <- clean_dataset %>%
-  filter(format(NZST_date_time, "%H:%M:%S") >= "07:00:00" & format(NZST_date_time, "%H:%M:%S") <= "18:00:00")
