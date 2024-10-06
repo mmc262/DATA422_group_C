@@ -29,6 +29,9 @@ clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
                        ORDER BY territorial_authority_code, statistical_area_level_2_code") %>%
   drop_na()
 
+# ONLY INCLUDE DAY 7AM TO 6 PM (ctrl + shift + C)
+clean_dataset$NZST_date_time <- as.POSIXct(clean_dataset$NZST_date_time, format="%Y-%m-%d %H:%M:%S", tz="UTC")
 
-
-summary(vf_tele_data)
+# Filter the data
+clean_dataset <- clean_dataset %>%
+  filter(format(NZST_date_time, "%H:%M:%S") >= "07:00:00" & format(NZST_date_time, "%H:%M:%S") <= "18:00:00")
