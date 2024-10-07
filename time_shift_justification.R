@@ -1,28 +1,28 @@
-# Read the data
+# read the data
 sp_tele_data <- read.csv("sp_data.csv.gz")
 vf_tele_data <- read_parquet("vf_data.parquet")
 
-# shifting time fowards 12 hours ----------------------------------------------------------
+# shifting time forwards 12 hours ----------------------------------------------------------
 
-# Select the first 40 rows from each data frame
+# select the first 40 rows from each data frame
 sp_head <- sp_tele_data %>% slice(1:40) %>%
   rename(devices = cnt, area = sa2, dt = ts)
 
 vf_head <- vf_tele_data %>% slice(1:40)
 
 
-# Convert the dt column to character in both data frames
+# convert the dt column to character in both data frames
 sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
 vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
 
-# Combine the data frames with row numbers to maintain the original order
+# combine the data frames with row numbers to maintain the original order
 sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
 vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
 
-# Combine the data frames
+# combine the data frames
 combined_data <- bind_rows(sp_head, vf_head)
 
-# Plot the dual bar chart with a smooth line
+# plot the dual bar chart with a smooth line
 ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
   geom_bar(stat = "identity", position = "dodge") +
   geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
@@ -37,25 +37,25 @@ ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
 
 # removing the first 12 hours ---------------------------------------------------------------
 
-# Select the first 40 rows from each data frame
+# select the first 40 rows from each data frame
 sp_head <- sp_tele_data %>% slice(13:52) %>%
   rename(devices = cnt, area = sa2, dt = ts)
 
 vf_head <- vf_tele_data %>% slice(1:40)
 
 
-# Convert the dt column to character in both data frames
+# convert the dt column to character in both data frames
 sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
 vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
 
-# Combine the data frames with row numbers to maintain the original order
+# combine the data frames with row numbers to maintain the original order
 sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
 vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
 
-# Combine the data frames
+# combine the data frames
 combined_data <- bind_rows(sp_head, vf_head)
 
-# Plot the dual bar chart with a smooth line
+# plot the dual bar chart with a smooth line
 ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
   geom_bar(stat = "identity", position = "dodge") +
   geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
