@@ -225,7 +225,7 @@ aggregated_data %>%
 ## Additional Scripts {-}
 Scripts that are not used in the main pipeline.
 
-### *export_data.set.R* {.unnumbered}
+### *export_dataset.R* {.unnumbered}
 
 <details>
 

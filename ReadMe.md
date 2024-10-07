@@ -279,7 +279,7 @@ aggregated_data %>%
 
 Scripts that are not used in the main pipeline.
 
-### *export_data.set.R*
+### *export_dataset.R*
 
 <details>
 <summary>

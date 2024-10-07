@@ -10,7 +10,8 @@ combined_location_data <- sqldf("SELECT scn.area_code, scn.location, stt.locatio
                                 JOIN sa2_to_ta stt ON scn.area_code == stt.area_code")
 
 # put clean data into new df
-cleaned_data <- sqldf("SELECT ctd.clean_date AS date_time, ctd.devices, ctd.area, cld.location, cld.location_2, ctd.data_from
+cleaned_data <- sqldf("SELECT ctd.clean_date AS date_time, ctd.devices, ctd.area,
+                      cld.location, cld.location_2, ctd.data_from
                       FROM combined_tele_data ctd
                       JOIN combined_location_data cld ON ctd.area == cld.area_code")
 
@@ -26,7 +27,8 @@ clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
                        CAST(SUM(devices) AS INTEGER) AS device_count
                        FROM cleaned_data
                        GROUP BY location_2, location, date_time
-                       ORDER BY territorial_authority_code, statistical_area_level_2_code") %>%
+                       ORDER BY territorial_authority_code, 
+                       statistical_area_level_2_code") %>%
   drop_na() %>%
   mutate(people_count = 1.52623 * device_count)
 
