@@ -1,17 +1,17 @@
 ---
 title: "ReadMe"
 output:
-  html_document:
-    theme: paper
-    toc: true 
+  github_document:
+#     theme: paper
+    toc: true
     toc_depth: 3
     number_sections: true
-    toc_float:
-      collapsed: true
-      smooth_scroll: true
-editor_options: 
-  markdown: 
-    wrap: sentence
+#     toc_float:
+#       collapsed: true
+#       smooth_scroll: true
+# editor_options:
+#   markdown:
+#     wrap: sentence
 ---
 
 ```{r setup, include=FALSE}
@@ -85,7 +85,7 @@ pop_estimates <- read.csv("subnational_pop_ests.csv")
 urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
 urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
 ```
-
+</details>
 ### *01_clean.R* {.unnumbered}
 
 <details>
@@ -120,7 +120,7 @@ sa2_to_ta <- rename(sa2_to_ta, area_code = Concordance.report, location_2 = X.3)
 urban_rural_codes <- rename(urban_rural_codes, area_code = Concordance.report)
 urban_rural_to_sa2 <- rename(urban_rural_to_sa2, area_code = Concordance.report, location_3 = X.3)
 ```
-
+</details>
 ### *02_merge.R* {.unnumbered}
 
 <details>
@@ -168,7 +168,7 @@ clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
 # clean_dataset <- clean_dataset %>%
 #   filter(format(NZST_date_time, "%H:%M:%S") >= "07:00:00" & format(NZST_date_time, "%H:%M:%S") <= "18:00:00")
 ```
-
+</details>
 ### *03_analysis.R* {.unnumbered}
 
 <details>
@@ -195,7 +195,7 @@ diff_device_counts <- sqldf("
   FROM clean_dataset
   ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
 ```
-
+</details>
 ### *04_visualize.R* {.unnumbered}
 
 <details>
@@ -228,7 +228,7 @@ aggregated_data %>%
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
 ```
-
+</details>
 ## Additional Scripts {-}
 Scripts that are not used in the main pipeline.
 
@@ -245,7 +245,7 @@ source("02_merge.R")
 # export clean data set
 write.csv(clean_dataset, file = "clean_dataset.csv", row.names = FALSE)
 ```
-
+</details>
 ### *population_linear_model.R* {.unnumbered}
 
 <details>
@@ -297,7 +297,7 @@ ggplot(population_devices_comp, aes(x = device_count, y = population)) +
 summary(model)
 
 ```
-
+</details>
 ### *required_packages.R* {.unnumbered}
 
 <details>
@@ -309,7 +309,7 @@ install.packages("arrow")
 install.packages("sqldf")
 install.packages("tidyverse")
 ```
-
+</details>
 ### *time_shift_justification.R* {.unnumbered}
 
 <details>
@@ -385,7 +385,7 @@ ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
        color = "Source") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
-
+</details>
 ### *auckland_cbd.R* {.unnumbered}
 
 <details>
@@ -460,7 +460,7 @@ auckland_aggregated_data %>%
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
 ```
-
+</details>
 ### *christchurch_cbd.R* {.unnumbered}
 
 <details>
@@ -532,7 +532,7 @@ christchurch_aggregated_data %>%
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
 ```
-
+</details>
 ### *wellington_cbd.R* {.unnumbered}
 
 <details>
@@ -607,7 +607,7 @@ wellington_aggregated_data %>%
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
 ```
-
+</details>
 ### *total_cbd.R* {.unnumbered}
 
 <details>
@@ -712,7 +712,7 @@ cbd_aggregated_data %>%
        x = "Day of the Week",
        y = "Sum of Absolute Changes")
 ```
-
+</details>
 # Datasets {-}
 A brief description of each dataset used, and a dropdown containing the variable names, and first 20 rows for each dataset.
 
@@ -723,7 +723,7 @@ A brief description of each dataset used, and a dropdown containing the variable
 sp_tele_data <- read.csv("sp_data.csv.gz")
 head(sp_tele_data, 20)
 ```
-
+</details>
 ### *vf_data* {-}
 <details>
 <summary>Telecommunications data from Vodafone.</summary>
@@ -731,6 +731,7 @@ head(sp_tele_data, 20)
 vf_tele_data <- read_parquet("vf_data.parquet")
 head(vf_tele_data ,20)
 ```
+</details>
 ### *sa2_2023* {-}
 <details>
 <summary>SA2 codes and names.</summary>
@@ -738,6 +739,7 @@ head(vf_tele_data ,20)
 sa2_codes_names <- read.csv("sa2_2023.csv")
 head(sa2_codes_names ,20)
 ```
+</details>
 ### *sa2_ta_concord_2023* {-}
 <details>
 <summary> Concordance for SA2 to Territorial Authorities (TA).</summary>
@@ -745,6 +747,7 @@ head(sa2_codes_names ,20)
 sa2_to_ta <- read.csv("sa2_ta_concord_2023.csv")
 head(sa2_to_ta ,20)
 ```
+</details>
 ### *subnational_pop_ests* {-}
 <details>
 <summary>A file with population estimates with demographic breakdown.</summary>
@@ -752,6 +755,7 @@ head(sa2_to_ta ,20)
 pop_estimates <- read.csv("subnational_pop_ests.csv")
 head(pop_estimates ,20)
 ```
+</details>
 ### *urban_rural_to_indicator_2023* {-}
 <details>
 <summary>Concordance between urban/rural codes and their type.</summary>
@@ -759,6 +763,7 @@ head(pop_estimates ,20)
 urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
 head(urban_rural_codes ,20)
 ```
+</details>
 ### *urban_rural_to_sa2_concord_2023* {-}
 <details>
 <summary>Concordance between urban/rural and SA2 codes.</summary>
@@ -766,3 +771,4 @@ head(urban_rural_codes ,20)
 urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
 head(urban_rural_to_sa2 ,20)
 ```
+</details>
