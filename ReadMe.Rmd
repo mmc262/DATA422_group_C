@@ -2,16 +2,9 @@
 title: "ReadMe"
 output:
   github_document:
-#     theme: paper
     toc: true
     toc_depth: 3
     number_sections: true
-#     toc_float:
-#       collapsed: true
-#       smooth_scroll: true
-# editor_options:
-#   markdown:
-#     wrap: sentence
 ---
 
 ```{r setup, include=FALSE}
