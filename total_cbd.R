@@ -50,7 +50,8 @@ total_cbd_data <- sqldf("SELECT *
               'Addington North',
               'Addington East',
               'Stanmore',
-              'Phillipstown')")
+              'Phillipstown')") %>%
+  filter(device_count > 0)
 
 cbd_device_counts <- sqldf("
   SELECT people_count,
@@ -78,19 +79,53 @@ cbd_diff_device_counts <- sqldf("
 
 # PLOT ------------------------------------------------------------------------
 
-# Add a new column for the day of the week
+# add a new column for the day of the week, and hour.
 cbd_diff_device_counts <- cbd_diff_device_counts %>%
-  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE),
+         hour = hour(NZST_date_time),
+         day = day(NZST_date_time))
 
-# Aggregate by day of the week and calculate the sum of absolute changes
+# DAY--------------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+cbd_aggregated_data <- cbd_diff_device_counts %>%
+  group_by(day) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+cbd_aggregated_data %>%
+  ggplot(aes(x = day, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+
+# HOUR -------------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+cbd_aggregated_data <- cbd_diff_device_counts %>%
+  group_by(hour) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+cbd_aggregated_data %>%
+  ggplot(aes(x = hour, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Hour of the Day in all CBD areas",
+       x = "Hour of the Day",
+       y = "Sum of Absolute Changes")
+
+# DAY OF WEEK ------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
 cbd_aggregated_data <- cbd_diff_device_counts %>%
   group_by(day_of_week) %>%
   summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
 
-# Plot the aggregated data
+# plot the aggregated data
 cbd_aggregated_data %>%
   ggplot(aes(x = day_of_week, y = total_difference)) +
   geom_col() +
-  labs(title = "Sum of Absolute Changes by Day of the Week In CBD Areas",
-       x = "Day of the Week",
+  labs(title = "Sum of Absolute Changes by Hour of the Day in all CBD areas",
+       x = "Hour of the Day",
        y = "Sum of Absolute Changes")

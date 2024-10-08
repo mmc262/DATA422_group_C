@@ -37,3 +37,18 @@ aggregated_data %>%
   labs(title = "Sum of Absolute Changes by Hour of the Day",
        x = "Hour of the Day",
        y = "Sum of Absolute Changes")
+
+# DAY OF WEEK ------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+aggregated_data <- diff_device_counts %>%
+  group_by(day_of_week) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+aggregated_data %>%
+  ggplot(aes(x = day_of_week, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by day of week",
+       x = "Hour of the Day",
+       y = "Sum of Absolute Changes")

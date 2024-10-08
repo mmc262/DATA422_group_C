@@ -16,7 +16,8 @@ christchurch_cbd_data <- sqldf("SELECT *
               'Addington North',
               'Addington East',
               'Stanmore',
-              'Phillipstown')")
+              'Phillipstown')") %>%
+  filter(device_count > 0)
 
 # Get device counts for christchurch and differences between device counts each hour
 christchurch_device_counts <- sqldf("
@@ -45,11 +46,45 @@ christchurch_diff_device_counts <- sqldf("
 
 # PLOT ------------------------------------------------------------------------
 
-# add a new column for the day of the week
+# add a new column for the day of the week, and hour.
 christchurch_diff_device_counts <- christchurch_diff_device_counts %>%
-  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE),
+         hour = hour(NZST_date_time),
+         day = day(NZST_date_time))
 
-# aggregate by day of the week and calculate the sum of absolute changes
+# DAY--------------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+christchurch_aggregated_data <- christchurch_diff_device_counts %>%
+  group_by(day) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+christchurch_aggregated_data %>%
+  ggplot(aes(x = day, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+
+# HOUR -------------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+christchurch_aggregated_data <- christchurch_diff_device_counts %>%
+  group_by(hour) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+christchurch_aggregated_data %>%
+  ggplot(aes(x = hour, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Hour of the Day in Christchurch CBD areas",
+       x = "Hour of the Day",
+       y = "Sum of Absolute Changes")
+
+# DAY OF WEEK ------------------------------------------------------------------
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
 christchurch_aggregated_data <- christchurch_diff_device_counts %>%
   group_by(day_of_week) %>%
   summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
@@ -58,6 +93,6 @@ christchurch_aggregated_data <- christchurch_diff_device_counts %>%
 christchurch_aggregated_data %>%
   ggplot(aes(x = day_of_week, y = total_difference)) +
   geom_col() +
-  labs(title = "Sum of Absolute Changes by Day of the Week In Christchurch CBD Areas",
-       x = "Day of the Week",
+  labs(title = "Sum of Absolute Changes by Hour of the Day in Christchurch CBD areas",
+       x = "Hour of the Day",
        y = "Sum of Absolute Changes")
