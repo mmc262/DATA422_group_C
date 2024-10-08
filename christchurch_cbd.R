@@ -93,6 +93,6 @@ christchurch_aggregated_data <- christchurch_diff_device_counts %>%
 christchurch_aggregated_data %>%
   ggplot(aes(x = day_of_week, y = total_difference)) +
   geom_col() +
-  labs(title = "Sum of Absolute Changes by Hour of the Day in Christchurch CBD areas",
+  labs(title = "Sum of Absolute Changes by day of week in Christchurch CBD areas",
        x = "Hour of the Day",
        y = "Sum of Absolute Changes")

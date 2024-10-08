@@ -96,6 +96,6 @@ auckland_aggregated_data <- auckland_diff_device_counts %>%
 auckland_aggregated_data %>%
   ggplot(aes(x = day_of_week, y = total_difference)) +
   geom_col() +
-  labs(title = "Sum of Absolute Changes by Hour of the Day in Auckland CBD areas",
+  labs(title = "Sum of Absolute Changes by day of week in Auckland CBD areas",
        x = "Hour of the Day",
        y = "Sum of Absolute Changes")
