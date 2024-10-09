@@ -83,7 +83,11 @@ cbd_diff_device_counts <- sqldf("
 cbd_diff_device_counts <- cbd_diff_device_counts %>%
   mutate(day_of_week = wday(NZST_date_time, label = TRUE),
          hour = hour(NZST_date_time),
-         day = day(NZST_date_time))
+         day = day(NZST_date_time)) %>%
+  filter(hour >= 7 & hour <= 18)
+# filter by day time only
+# %>%
+#   filter(hour >= 7 & hour <= 18)
 
 # DAY--------------------------------------------------------------------------
 
