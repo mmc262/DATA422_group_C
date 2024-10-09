@@ -1,0 +1,767 @@
+---
+title: "ReadMe"
+output:
+  github_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(arrow)
+library(sqldf)
+library(tidyverse)
+library(lubridate)
+
+```
+
+# Purpose Of This Project {-}
+In this project, we will assist Fulton Hogan by helping them choose the best time to schedule of roadworks in the Central Business Districts (CBDs) of Auckland, Christchurch, and Wellington. We will do this by determining the benefits of planning these roadworks during school holidays, the best time of day to plan the roadworks, and by considering any geographical differences between the cities. We aim to find out which time of day provides the safest , least disruptive , and most cost effective window for roadworks, and whether school holidays provide the same benefits. We will also provide Fulton Hogan with a cleaned dataset, so their data scientists can conduct any further investigations in the future. 
+
+# Getting Started {-}
+
+Before running any scripts in this project, the following packages need to be installed:
+
+## Prerequisites {-}
+
+Required packages to run all scripts, found in the required_packages.R script.
+
+-   Arrow<br>*Used to read .parquet files.*
+
+    ``` sh
+    install.packages("arrow")
+    ```
+
+-   Sqldf<br>*Use SQL statements to combine and filter data.*
+
+    ``` sh
+    install.packages("sqldf")
+    ```
+
+-   Tidyverse<br>*Used for piping and plotting.*
+
+    ``` sh
+    install.packages("tidyverse")
+    ```
+
+# Scripts {-}
+
+The following scripts are broken into two sections, main scripts, and additional scripts.<br>
+The main scripts consist of the data processing pipeline, starting from loading the raw data to plotting the clean dataset. <br>
+The additional scripts are for running the main scripts on specific cities, and some additional information used in the methods PDF.
+
+## Main Scripts {-}
+These scripts make up the five main steps used in this project, starting from loading the raw data to plotting the clean dataset.
+
+
+### *00_load.R* {.unnumbered}
+
+<details>
+
+<summary>Loads the required libraries, which should be install via the required_packages.R script.
+It also reads in all the data which is required to answer the questions posed by the stakeholders.</summary>
+
+``` sh
+# load libraries
+library(arrow)
+library(sqldf)
+library(tidyverse)
+library(lubridate)
+
+# read in raw data
+sp_tele_data <- read.csv("sp_data.csv.gz")
+vf_tele_data <- read_parquet("vf_data.parquet")
+sa2_codes_names <- read.csv("sa2_2023.csv")
+sa2_to_ta <- read.csv("sa2_ta_concord_2023.csv")
+pop_estimates <- read.csv("subnational_pop_ests.csv")
+urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
+urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
+```
+</details>
+### *01_clean.R* {.unnumbered}
+
+<details>
+
+<summary>Cleans the Spark and Vodafone telecommunications data by renaming variables so they are matching for both data sets, and for easier interpretation.
+The date & time data is also reformatted so both data sets are compatible for merging.</summary>
+
+``` sh
+# run previous script
+source("00_load.R")
+
+# clean date time data
+vf_tele_data <- vf_tele_data %>% mutate(clean_date = as.POSIXct(dt, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC") + 12 * 3600,
+                                        clean_date = format(clean_date, "%Y-%m-%d %H:%M:%S"),
+                                        data_from = "vf") %>%
+  distinct()
+
+sp_tele_data <- sp_tele_data %>%
+  # Perform the mutation
+  mutate(clean_date = as.POSIXct(ts, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC") + 12 * 3600,
+         clean_date = format(clean_date, "%Y-%m-%d %H:%M:%S"),
+         data_from = "sp") %>%
+  distinct()
+
+
+
+# clean columns and variable names
+sa2_codes_names <- rownames_to_column(sa2_codes_names)
+sa2_codes_names <- rename(sa2_codes_names, area_code = rowname, location = Classification.report)
+sp_tele_data <- rename(sp_tele_data, dt = ts, area = sa2, devices = cnt)
+sa2_to_ta <- rename(sa2_to_ta, area_code = Concordance.report, location_2 = X.3)
+urban_rural_codes <- rename(urban_rural_codes, area_code = Concordance.report)
+urban_rural_to_sa2 <- rename(urban_rural_to_sa2, area_code = Concordance.report, location_3 = X.3)
+```
+</details>
+### *02_merge.R* {.unnumbered}
+
+<details>
+
+<summary>Combines the telecommunications data and the location data, which is further combined into one large dataset called cleaned_data.
+The required variables are then renamed for use in the clean_dataset, which is outputted to be returned in the deliverables, and used for all further analysis.</summary>
+
+``` sh
+# run previous script
+source("01_clean.R")
+
+# combine telecommunications data from spark and vodafone
+combined_tele_data <- rbind(sp_tele_data, vf_tele_data)
+
+# combine location data
+combined_location_data <- sqldf("SELECT scn.area_code, scn.location, stt.location_2
+                                FROM sa2_codes_names scn
+                                JOIN sa2_to_ta stt ON scn.area_code == stt.area_code")
+
+# put clean data into new df
+cleaned_data <- sqldf("SELECT ctd.clean_date AS date_time, ctd.devices, ctd.area, cld.location, cld.location_2, ctd.data_from
+                      FROM combined_tele_data ctd
+                      JOIN combined_location_data cld ON ctd.area == cld.area_code")
+
+# Ensure date_time is in the correct format
+cleaned_data <- cleaned_data %>%
+  mutate(date_time = as.POSIXct(date_time, format="%Y-%m-%d %H:%M:%S", tz="UTC")) %>%
+  mutate(date_time = format(date_time, format = "%Y-%m-%d %H:%M:%S"))
+
+# clean dataset (deliverable)
+clean_dataset <- sqldf("SELECT location AS territorial_authority_code,
+                       location_2 AS statistical_area_level_2_code,
+                       date_time AS NZST_date_time,
+                       CAST(SUM(devices) AS INTEGER) AS device_count
+                       FROM cleaned_data
+                       GROUP BY location_2, location, date_time
+                       ORDER BY territorial_authority_code, statistical_area_level_2_code") %>%
+  drop_na() %>%
+  mutate(people_count = 1.819 * device_count)
+
+# ONLY INCLUDE DAY 7AM TO 6 PM (ctrl + shift + C)
+# clean_dataset$NZST_date_time <- as.POSIXct(clean_dataset$NZST_date_time, format="%Y-%m-%d %H:%M:%S", tz="UTC")
+# 
+# # Filter the data
+# clean_dataset <- clean_dataset %>%
+#   filter(format(NZST_date_time, "%H:%M:%S") >= "07:00:00" & format(NZST_date_time, "%H:%M:%S") <= "18:00:00")
+```
+</details>
+### *03_analysis.R* {.unnumbered}
+
+<details>
+
+<summary>Creates a new variable, which is the current count of people in the area minus the amount of people in the area in the previous hour.
+This gives the difference in people between hours, which models the amount of people travelling between areas.</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# get device counts and difference in device counts from last hour
+diff_device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS total_difference,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM clean_dataset
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+```
+</details>
+### *04_visualize.R* {.unnumbered}
+
+<details>
+
+<summary>Adds a new variable to aggregate the data by either day or hour.
+The data is then plotted to see absolute change in people by day or hour.</summary>
+
+``` sh
+# run previous script
+source("03_analysis.R")
+
+
+# add a new column for the day of the week, and hour.
+diff_device_counts <- diff_device_counts %>%
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE),
+         hour = hour(NZST_date_time),
+         day = day(NZST_date_time))
+
+# aggregate by day of the week or hour and calculate the sum of absolute changes
+# change "day" for "hour" to plot by hour
+aggregated_data <- diff_device_counts %>%
+  group_by(day) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+aggregated_data %>%
+  ggplot(aes(x = day, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+```
+</details>
+## Additional Scripts {-}
+Scripts that are not used in the main pipeline.
+
+### *export_dataset.R* {.unnumbered}
+
+<details>
+
+<summary>Exports the clean data set to be returned in the deliverables.</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# export clean data set
+write.csv(clean_dataset, file = "clean_dataset.csv", row.names = FALSE)
+```
+</details>
+### *population_linear_model.R* {.unnumbered}
+
+<details>
+
+<summary>Gives the function used to model the number of people based on device count.</summary>
+
+``` sh
+# get population estimates
+population_estimates <- sqldf("SELECT *
+              FROM pop_estimates
+              WHERE Age = 'Total people, age'
+              AND AREA_POPES_SUB_006 >= 100100
+              AND AREA_POPES_SUB_006 != 'NZTA'
+              AND AREA_POPES_SUB_006 != 99900")
+
+# tidy data
+sa2_codes_names <- rownames_to_column(sa2_codes_names) %>%
+  rename(area_name = Classification.report)
+
+# match population estimates with names
+population_estimates_names <- sqldf("SELECT obs_value AS population, rowname AS area_code, area_name AS name
+                FROM test t
+                JOIN sa2_codes_names sa2 ON t.AREA_POPES_SUB_006 = sa2.rowname")
+
+# get device counts at 5AM on Teusday, 11th of June
+device_count <- sqldf("SELECT *
+                FROM clean_dataset
+                WHERE NZST_date_time = '2024-06-11 05:00:00'")
+
+# compare device counts to population
+population_devices_comp <- sqldf("SELECT name, population, device_count
+                FROM device_count dc
+                JOIN population_estimates_names pen ON dc.territorial_authority_code = pen.name
+                ORDER BY population DESC")
+
+# fit linear model to predict population using device count
+model <- lm(population ~ 0+device_count, data = population_devices_comp)
+
+# plot data with regression line
+ggplot(population_devices_comp, aes(x = device_count, y = population)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ 0 + x, se = FALSE) +
+  geom_abline(intercept = 0, slope = 1, color = "red", size = 1) +
+  labs(title = "Population vs Devices",
+       x = "Devices",
+       y = "Population")
+
+# summary of linear model
+summary(model)
+
+```
+</details>
+### *required_packages.R* {.unnumbered}
+
+<details>
+
+<summary>Contains the code used to install the required packages.</summary>
+
+``` sh
+install.packages("arrow")
+install.packages("sqldf")
+install.packages("tidyverse")
+```
+</details>
+### *time_shift_justification.R* {.unnumbered}
+
+<details>
+
+<summary>Shows the reasons for why time is shifted forward by 12 hours in the Spark telecommunications data.<br> Further explained in the methods PDF.</summary>
+
+``` sh
+# read the data
+sp_tele_data <- read.csv("sp_data.csv.gz")
+vf_tele_data <- read_parquet("vf_data.parquet")
+
+# shifting time forwards 12 hours ----------------------------------------------------------
+
+# select the first 40 rows from each data frame
+sp_head <- sp_tele_data %>% slice(1:40) %>%
+  rename(devices = cnt, area = sa2, dt = ts)
+
+vf_head <- vf_tele_data %>% slice(1:40)
+
+
+# convert the dt column to character in both data frames
+sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+
+# combine the data frames with row numbers to maintain the original order
+sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
+vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
+
+# combine the data frames
+combined_data <- bind_rows(sp_head, vf_head)
+
+# plot the dual bar chart with a smooth line
+ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
+  labs(title = "Device Counts Comparison for Each Row",
+       x = "Row Order",
+       y = "Device Counts",
+       fill = "Source",
+       color = "Source") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+# removing the first 12 hours ---------------------------------------------------------------
+
+# select the first 40 rows from each data frame
+sp_head <- sp_tele_data %>% slice(13:52) %>%
+  rename(devices = cnt, area = sa2, dt = ts)
+
+vf_head <- vf_tele_data %>% slice(1:40)
+
+
+# convert the dt column to character in both data frames
+sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+
+# combine the data frames with row numbers to maintain the original order
+sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
+vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
+
+# combine the data frames
+combined_data <- bind_rows(sp_head, vf_head)
+
+# plot the dual bar chart with a smooth line
+ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
+  labs(title = "Device Counts Comparison for Each Row",
+       x = "Row Order",
+       y = "Device Counts",
+       fill = "Source",
+       color = "Source") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+</details>
+### *auckland_cbd.R* {.unnumbered}
+
+<details>
+
+<summary>Runs all the main scripts, but only on areas within the Auckland CBD.</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# filter data to include only Auckland CBD areas
+auckland_cbd_data <- sqldf("SELECT *
+              FROM clean_dataset
+              WHERE territorial_authority_code IN ('Queen Street',
+              'Quay Street-Customs Street',
+              'Wynyard-Viaduct',
+              'Shortland Street',
+              'Victoria Park',
+              'Hobson Ridge North',
+              'Hobson Ridge Central',
+              'Hobson Ridge South',
+              'Freemans Bay',
+              'Auckland-University',
+              'College Hill',
+              'Ponsonby East',
+              'Ponsonby West',
+              'Saint Marys Bay',
+              'Symonds Street East',
+              'Symonds Street North West',
+              'Symonds Street West')")
+
+auckland_device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS difference_from_last_hour,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM auckland_cbd_data
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+
+auckland_diff_device_counts <- sqldf("
+  SELECT 
+    difference_from_last_hour AS total_difference,
+    statistical_area_level_2_code,
+    territorial_authority_code,
+    NZST_date_time,
+    people_count,
+    previous_hour_people_count
+  FROM auckland_device_counts")
+
+# PLOT ------------------------------------------------------------------------
+
+# Add a new column for the day of the week
+auckland_diff_device_counts <- auckland_diff_device_counts %>%
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+
+# Aggregate by day of the week and calculate the sum of absolute changes
+auckland_aggregated_data <- auckland_diff_device_counts %>%
+  group_by(day_of_week) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# Plot the aggregated data
+auckland_aggregated_data %>%
+  ggplot(aes(x = day_of_week, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week In Auckland CBD Areas",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+```
+</details>
+### *christchurch_cbd.R* {.unnumbered}
+
+<details>
+
+<summary>Runs all the main scripts, but only on areas within the Christchurch CBD.</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# filter data to include only Christchurch CBD areas
+christchurch_cbd_data <- sqldf("SELECT *
+              FROM clean_dataset
+              WHERE territorial_authority_code IN ('Christchurch Central-West',
+              'Christchurch Central-North',
+              'Christchurch Central',
+              'Christchurch Central-East',
+              'Christchurch Central-South',
+              'Hagley Park',
+              'Lancaster Park',
+              'Sydenham Central',
+              'Addington West',
+              'Addington North',
+              'Addington East',
+              'Stanmore',
+              'Phillipstown')")
+
+# Get device counts for christchurch and differences between device counts each hour
+christchurch_device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS difference_from_last_hour,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM christchurch_cbd_data
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+
+christchurch_diff_device_counts <- sqldf("
+  SELECT 
+    difference_from_last_hour AS total_difference,
+    statistical_area_level_2_code,
+    territorial_authority_code,
+    NZST_date_time,
+    people_count,
+    previous_hour_people_count
+  FROM christchurch_device_counts")
+
+# PLOT ------------------------------------------------------------------------
+
+# add a new column for the day of the week
+christchurch_diff_device_counts <- christchurch_diff_device_counts %>%
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+
+# aggregate by day of the week and calculate the sum of absolute changes
+christchurch_aggregated_data <- christchurch_diff_device_counts %>%
+  group_by(day_of_week) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# plot the aggregated data
+christchurch_aggregated_data %>%
+  ggplot(aes(x = day_of_week, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week In Christchurch CBD Areas",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+```
+</details>
+### *wellington_cbd.R* {.unnumbered}
+
+<details>
+
+<summary>Runs all the main scripts, but only on areas within the Wellington CBD.</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# filter data to include only Wellington CBD areas
+wellington_cbd_data <- sqldf("SELECT *
+              FROM clean_dataset
+              WHERE territorial_authority_code IN ('Pipitea-Kaiwharawhara',
+              'Thorndon South',
+              'Wellington Botanic Gardens',
+              'Kelburn', 'Aro Valley',
+              'Wellington University',
+              'Wellington Central',
+              'Dixon Street West',
+              'Dixon Street East',
+              'Vivian West',
+              'Courtenay',
+              'Mount Cook North',
+              'Mount Cook South',
+              'Vivian East',
+              'Mount Cook East',
+              'Mount Victoria North',
+              'Mount Victoria South',
+              'Oriental Bay')")
+
+wellington_device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS difference_from_last_hour,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM wellington_cbd_data
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+
+wellington_diff_device_counts <- sqldf("
+  SELECT 
+    difference_from_last_hour AS total_difference,
+    statistical_area_level_2_code,
+    territorial_authority_code,
+    NZST_date_time,
+    people_count,
+    previous_hour_people_count
+  FROM wellington_device_counts")
+
+# PLOT ------------------------------------------------------------------------
+
+# Add a new column for the day of the week
+wellington_diff_device_counts <- wellington_diff_device_counts %>%
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+
+# Aggregate by day of the week and calculate the sum of absolute changes
+wellington_aggregated_data <- wellington_diff_device_counts %>%
+  group_by(day_of_week) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# Plot the aggregated data
+wellington_aggregated_data %>%
+  ggplot(aes(x = day_of_week, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week In Wellington CBD Areas",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+```
+</details>
+### *total_cbd.R* {.unnumbered}
+
+<details>
+
+<summary>Runs all the main scripts, but only on within CBD areas (Auckland, Christchurch, and Wellington).</summary>
+
+``` sh
+# run previous script
+source("02_merge.R")
+
+# filter data to include only CBD areas
+total_cbd_data <- sqldf("SELECT *
+              FROM clean_dataset
+              WHERE territorial_authority_code IN ('Queen Street',
+              'Quay Street-Customs Street',
+              'Wynyard-Viaduct',
+              'Shortland Street',
+              'Victoria Park',
+              'Hobson Ridge North',
+              'Hobson Ridge Central',
+              'Hobson Ridge South',
+              'Freemans Bay',
+              'Auckland-University',
+              'College Hill',
+              'Ponsonby East',
+              'Ponsonby West',
+              'Saint Marys Bay',
+              'Symonds Street East',
+              'Symonds Street North West',
+              'Symonds Street West',
+              'Pipitea-Kaiwharawhara',
+              'Thorndon South',
+              'Wellington Botanic Gardens',
+              'Kelburn', 'Aro Valley',
+              'Wellington University',
+              'Wellington Central',
+              'Dixon Street West',
+              'Dixon Street East',
+              'Vivian West',
+              'Courtenay',
+              'Mount Cook North',
+              'Mount Cook South',
+              'Vivian East',
+              'Mount Cook East',
+              'Mount Victoria North',
+              'Mount Victoria South',
+              'Oriental Bay',
+              'Christchurch Central-West',
+              'Christchurch Central-North',
+              'Christchurch Central',
+              'Christchurch Central-East',
+              'Christchurch Central-South',
+              'Hagley Park',
+              'Lancaster Park',
+              'Sydenham Central',
+              'Addington West',
+              'Addington North',
+              'Addington East',
+              'Stanmore',
+              'Phillipstown')")
+
+cbd_device_counts <- sqldf("
+  SELECT people_count,
+    LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS previous_hour_people_count,
+    people_count - LAG(people_count, 1) 
+    OVER(PARTITION BY territorial_authority_code, statistical_area_level_2_code 
+    ORDER BY NZST_date_time) AS difference_from_last_hour,
+    territorial_authority_code,
+    statistical_area_level_2_code,
+    NZST_date_time
+  FROM total_cbd_data
+  ORDER BY territorial_authority_code, statistical_area_level_2_code, NZST_date_time")
+
+cbd_diff_device_counts <- sqldf("
+  SELECT 
+    difference_from_last_hour AS total_difference,
+    statistical_area_level_2_code,
+    territorial_authority_code,
+    NZST_date_time,
+    people_count,
+    previous_hour_people_count
+  FROM cbd_device_counts")
+
+# PLOT ------------------------------------------------------------------------
+
+# Add a new column for the day of the week
+cbd_diff_device_counts <- cbd_diff_device_counts %>%
+  mutate(day_of_week = wday(NZST_date_time, label = TRUE))
+
+# Aggregate by day of the week and calculate the sum of absolute changes
+cbd_aggregated_data <- cbd_diff_device_counts %>%
+  group_by(day_of_week) %>%
+  summarise(total_difference = sum(abs(total_difference), na.rm = TRUE))
+
+# Plot the aggregated data
+cbd_aggregated_data %>%
+  ggplot(aes(x = day_of_week, y = total_difference)) +
+  geom_col() +
+  labs(title = "Sum of Absolute Changes by Day of the Week In CBD Areas",
+       x = "Day of the Week",
+       y = "Sum of Absolute Changes")
+```
+</details>
+# Datasets {-}
+A brief description of each dataset used, and a dropdown containing the variable names, and first 20 rows for each dataset.
+
+### *sp_data* {-}
+<details>
+<summary>Telecommunications data from Spark.</summary>
+```{r}
+sp_tele_data <- read.csv("sp_data.csv.gz")
+head(sp_tele_data, 20)
+```
+</details>
+### *vf_data* {-}
+<details>
+<summary>Telecommunications data from Vodafone.</summary>
+```{r}
+vf_tele_data <- read_parquet("vf_data.parquet")
+head(vf_tele_data ,20)
+```
+</details>
+### *sa2_2023* {-}
+<details>
+<summary>SA2 codes and names.</summary>
+```{r}
+sa2_codes_names <- read.csv("sa2_2023.csv")
+head(sa2_codes_names ,20)
+```
+</details>
+### *sa2_ta_concord_2023* {-}
+<details>
+<summary> Concordance for SA2 to Territorial Authorities (TA).</summary>
+```{r}
+sa2_to_ta <- read.csv("sa2_ta_concord_2023.csv")
+head(sa2_to_ta ,20)
+```
+</details>
+### *subnational_pop_ests* {-}
+<details>
+<summary>A file with population estimates with demographic breakdown.</summary>
+```{r}
+pop_estimates <- read.csv("subnational_pop_ests.csv")
+head(pop_estimates ,20)
+```
+</details>
+### *urban_rural_to_indicator_2023* {-}
+<details>
+<summary>Concordance between urban/rural codes and their type.</summary>
+```{r}
+urban_rural_codes <- read.csv("urban_rural_to_indicator_2023.csv")
+head(urban_rural_codes ,20)
+```
+</details>
+### *urban_rural_to_sa2_concord_2023* {-}
+<details>
+<summary>Concordance between urban/rural and SA2 codes.</summary>
+```{r}
+urban_rural_to_sa2 <- read.csv("urban_rural_to_sa2_concord_2023.csv")
+head(urban_rural_to_sa2 ,20)
+```
+</details>

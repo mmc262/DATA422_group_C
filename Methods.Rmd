@@ -1,0 +1,239 @@
+---
+title: "Methods"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Main Pipeline
+
+## 00_load.R
+
+Load in all required libraries for main pipeline.
+
+Read in raw data.
+
+## 01_clean.R
+
+Run previous step in pipeline.
+
+Reformat date time data so both Spark and Vodafone match.  
+Add the variable "data_from" to ensure merging is done correctly.  
+Remove duplicate entries.  
+Add 12 hours to each row of Spark data (explained in time_shift_justification.R).
+
+Clean variable names for each data frame.
+
+## 02_merge.R
+
+Run previous step in pipeline.
+
+Combine telecommunications and location data.  
+Combine further into a cleaned_data set. Reformat date time data (issues with formats when testing).
+
+### *Created clean dataset:*
+
+Give all variables proper names.  
+Combine device counts for Spark and Vodafone data. Remove NA values.  
+Use formula (from population_linear_model) to predict people_count from device_count.
+
+Commented section for including only observations taken during the day.  
+*7AM to 6PM chosen as data was taken during daylight savings time.*
+
+## 03_analysis.R
+
+Run previous step in pipeline.
+
+Create new variable, which is the current device count minus the device count of the previous hour.  
+This models the change in the amount of people between hours.
+
+## 04_vizualize.R
+
+Run previous step in pipeline.
+
+Add new variable to each row that shows the day of the week, and which hour the row was recorded in.  
+Aggregate data by day/hour.  
+Plot the absolute difference in the amount of people for each day/hour.
+
+# Additional Scripts
+
+### export_data.R
+
+Export clean data set to be given to Fulton Hogan data scientists.
+
+### population_liner_model.R
+
+Get population estimates for each area (from pop_estimates) and tidy variable names.  
+Combine to match population estimates with the name of area.  
+Add new variable which takes the device count in each area.  
+*5AM on Tuesday, 11th of June chosen to model device counts, as Tuesday was shown to have the lowest change in device count, and 5AM chosen for similar reasons.*  
+Fit linear model to predict population using device count.  
+*Intercept of zero chosen, as a negative population doesn't make sense.*  
+Summary and plot of data.
+
+```{r, message=FALSE, warning=FALSE}
+# knitr::opts_chunk$set(echo = FALSE)
+# source("02_merge.R")
+# 
+# # get population estimates
+# population_estimates <- sqldf("SELECT *
+#               FROM pop_estimates
+#               WHERE Age = 'Total people, age'
+#               AND AREA_POPES_SUB_006 >= 100100
+#               AND AREA_POPES_SUB_006 != 'NZTA'
+#               AND AREA_POPES_SUB_006 != 99900")
+# 
+# # match population estimates with names
+# population_estimates_names <- sqldf("SELECT obs_value AS population, area_code, location AS name
+#                 FROM population_estimates t
+#                 JOIN sa2_codes_names sa2 ON t.AREA_POPES_SUB_006 = sa2.area_code")
+# 
+# # get device counts at 5AM on Tuesday, 11th of June
+# device_count <- sqldf("SELECT *
+#                 FROM clean_dataset
+#                 WHERE NZST_date_time = '2024-06-11 05:00:00'")
+# 
+# # compare device counts to population
+# population_devices_comp <- sqldf("SELECT name, population, device_count
+#                 FROM device_count dc
+#                 JOIN population_estimates_names pen ON dc.territorial_authority_code = pen.name
+#                 ORDER BY population DESC")
+# 
+# # fit linear model to predict population using device count
+# model <- lm(population ~ 0+device_count, data = population_devices_comp)
+# 
+# # plot data with regression line
+# ggplot(population_devices_comp, aes(x = device_count, y = population)) +
+#   geom_point() +
+#   geom_smooth(method = "lm", formula = y ~ 0 + x, se = FALSE) +
+#   geom_abline(intercept = 0, slope = 1, color = "red", size = 1) +
+#   labs(title = "Population vs Devices",
+#        x = "Devices",
+#        y = "Population")
+
+```
+
+### required_packages.R
+Installs required packages to run scripts.
+
+### time_shift_justification.R
+
+In the raw data, the Spark data starts starts 12 hours earlier than the Vodafone data.  
+This presents multiple issues:  
+The first and final days only having 12 hours worth of device counts.  
+The data starting and ending in the afternoon instead of midnight.  
+The data between mobile carriers being out of sync.
+
+We decided mutating the Spark data was the best approach, as the Vodafone data started at midnight, and encapsulated exactly two weeks.  
+To determine whether we would remove the first and last 12 hours or shift every observation foward by 12 hours, we created these plots.  
+
+```{r, message=FALSE, warning=FALSE, fig.width= 3.5, fig.height=3}
+# knitr::opts_chunk$set(echo = FALSE)
+# # load packages
+# library(arrow)
+# library(sqldf)
+# library(tidyverse)
+# library(lubridate)
+# 
+# # read the data
+# sp_tele_data <- read.csv("sp_data.csv.gz")
+# vf_tele_data <- read_parquet("vf_data.parquet")
+# 
+# # shifting time forwards 12 hours ----------------------------------------------------------
+# 
+# # select the first 40 rows from each data frame
+# sp_head <- sp_tele_data %>% slice(1:40) %>%
+#   rename(devices = cnt, area = sa2, dt = ts)
+# 
+# vf_head <- vf_tele_data %>% slice(1:40)
+# 
+# 
+# # convert the dt column to character in both data frames
+# sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+# vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+# 
+# # combine the data frames with row numbers to maintain the original order
+# sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
+# vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
+# 
+# # combine the data frames
+# combined_data <- bind_rows(sp_head, vf_head)
+# 
+# # plot the dual bar chart with a smooth line
+# ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
+#   geom_bar(stat = "identity", position = "dodge") +
+#   geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
+#   labs(title = "Time Shifted",
+#        x = "Row Order",
+#        y = "Device Counts",
+#        fill = "Source",
+#        color = "Source") +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# 
+# 
+# 
+# # removing the first 12 hours ---------------------------------------------------------------
+# 
+# # select the first 40 rows from each data frame
+# sp_head <- sp_tele_data %>% slice(13:52) %>%
+#   rename(devices = cnt, area = sa2, dt = ts)
+# 
+# vf_head <- vf_tele_data %>% slice(1:40)
+# 
+# 
+# # convert the dt column to character in both data frames
+# sp_head <- sp_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+# vf_head <- vf_head %>% mutate(dt = as.character(dt), area = as.numeric(area))
+# 
+# # combine the data frames with row numbers to maintain the original order
+# sp_head <- sp_head %>% mutate(row_order = row_number(), source = "SP")
+# vf_head <- vf_head %>% mutate(row_order = row_number(), source = "VF")
+# 
+# # combine the data frames
+# combined_data <- bind_rows(sp_head, vf_head)
+# 
+# # plot the dual bar chart with a smooth line
+# ggplot(combined_data, aes(x = factor(row_order), y = devices, fill = source)) +
+#   geom_bar(stat = "identity", position = "dodge") +
+#   geom_smooth(aes(group = source, color = source), method = "loess", se = FALSE) +
+#   labs(title = "Rows Removed",
+#        x = "Row Order",
+#        y = "Device Counts",
+#        fill = "Source",
+#        color = "Source") +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+As the plots show, when shifting time forwards, the relative counts for both carriers matched up perfectly, and when removing rows they were out of sync.  
+This is how we justified moving on by shifting the time for each row of the spark data forwards by 12 hours.
+
+### auckland_cbd.R
+
+Runs the main pipeline, but filters data to only include areas within the Auckland CBD.
+
+### christchurch_cbd.R
+
+Runs the main pipeline, but filters data to only include areas within the Christchurch CBD.
+
+### wellingotn_cbd.R
+
+Runs the main pipeline, but filters data to only include areas within the Wellington CBD.
+
+### total_cbd.R
+
+Runs the main pipeline, but filters data to only include areas within the CBDs for each city.
+
+# Limitations
+With this data, we have a device count for each area each hour, and we modeled movement by taking the difference in device count, with a lower device count meaning people were leaving, and a higher device count meaning people were coming in. With this data, we could not account for people both leaving and coming into an area in the same hour. For example, is 4,000 devices were leaving Christchurch Central, and 4,100 devices were coming into Christchurch Central in the same hour, we would only see a change of +100 devices, even though there were 8,000 other devices moving between the area.  
+
+Due to this, areas which experience similar levels of people both entering and leaving would be under counted. For our analysis, we had to assume this affected all CBD areas equally, and affected each day equally, so the results could still produce useful insight.  
+<br><br><br><br><br>  
+  
+Another limitation when using device counts is cell towers going down. When inspecting the data we observed areas with a device count of 0, when the previous and next hour had a device count greater than 0. This is likely due to cell towers malfunctioning, or reporting the device count wrong. This disproportionately affected CBD areas, as they tended to have higher device counts leading to higher difference counts when the device count was not recorded properly.  
+
+This is why we decided to remove observations with device counts of zero in CBD areas. This is a limitation, as we do not know exactly what caused the device count to be miscounted, which could affect the patterns we saw in the plots. For example, if cell towers were down for maintenance, and they were always scheduled for a Tuesday, we would see significantly lower changes for Tuesdays. Luckily we only had two weeks worth of data, but this effect would be magnified for longer periods of time, so a different approach should be considered for larger data sets.
+
+# Future Improvements
