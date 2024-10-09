@@ -6,7 +6,12 @@ source("03_analysis.R")
 diff_device_counts <- diff_device_counts %>%
   mutate(day_of_week = wday(NZST_date_time, label = TRUE),
          hour = hour(NZST_date_time),
-         day = day(NZST_date_time))
+         day = day(NZST_date_time)) 
+
+# filter by day time only
+# %>%
+#   filter(hour >= 7 & hour <= 18)
+
 
 # DAY--------------------------------------------------------------------------
 
